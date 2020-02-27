@@ -1,1 +1,1 @@
-{"indicators": [{"TYPE": "PeakTrough", "PARAMS": {"interval": 30}}, {"TYPE": "BullOrBear", "PARAMS": {"period": 1000}}], "batch_size": 8, "gamma": 0.8, "epsilon": 0.10816952551190502, "epsilon_min": 0.01, "epsilon_decay": 0.99995, "learning_rate": 0.005, "tau": 0.125}
+{"indicators": [{"TYPE": "PeakTrough", "PARAMS": {"interval": 30}}, {"TYPE": "BullOrBear", "PARAMS": {"period": 1000}}], "batch_size": 8, "gamma": 0.8, "epsilon": 0.9555185156327971, "epsilon_min": 0.01, "epsilon_decay": 0.99995, "learning_rate": 0.005, "tau": 0.125}

@@ -14,6 +14,7 @@ class DeepQNetwork:
     def __init__(self, strategy):
         self.strategy = strategy
         self.STM = None
+        self.WM = []
         self.LTM = deque(maxlen=1000)
 
         self.modelName = 'SORIN_1'
@@ -28,7 +29,6 @@ class DeepQNetwork:
         self.tau = .125
 
         self.model = self.createModel()
-        self.target_model = self.createModel()
 
     def createModel(self):
         # The number of hidden neurons should be between the size of the input layer and the size of the output layer.
@@ -82,45 +82,63 @@ class DeepQNetwork:
             return np.random.randint(2)
         return np.argmax(self.model.predict(state)[0])
 
-    def QReward(self, action, delta):
-
+    def QReward(self, action, oldPrice, newPrice):
+        delta = (newPrice/oldPrice) - 1
         if delta>0 and action: reward = delta*1.2
         elif delta<0 and action: reward = delta
         elif delta<0 and not action: reward = -delta
         elif delta>0 and not action: reward = -delta
         return 0.5 if delta==0 else reward*100000
 
-    def addToSTM(self, state, action):
-        self.STM = [state, action]
+    def addToSTM(self, price, state, action):
+        self.STM = [price, state, action]
 
-    def moveToLTM(self, delta, newState):
+    def moveToWM(self, STPrice, STNewState):
+        reward = 0
         if self.STM is not None:
-            _, action = self.STM
-            reward = self.QReward(action, delta)
-
-            self.STM.extend([reward, delta, newState])
-            self.LTM.append(self.STM)
+            price, _, action = self.STM
+            if not action:
+                reward = self.QReward(action, price, STPrice)
+                self.STM.extend([STPrice, reward, STNewState])
+            else:
+                self.STM.extend([STPrice])
+            self.WM.append(self.STM)
             self.STM = None
+        return reward
 
-            return reward
-        return 0
+    def moveToLTM(self, LTPrice, LTNewState):
+        # Memory format:
+        #   [price, state, action, STPrice, reward, newState, LTPrice]
+        rewards = []
+        while len(self.WM) > 0:
+            memory = self.WM.pop(0)
+            price = memory[0]
+            action = memory[2]
+            if action:
+                reward = self.QReward(action, price, LTPrice)
+                memory.extend([reward, LTNewState, LTPrice])
+            else:
+                memory.extend([LTPrice])
+            self.LTM.append(memory)
+            rewards.append(memory[4])
+        return np.average(rewards)
 
 
     def replay(self):
         if len(self.LTM) < self.batch_size:
-            return 0
+            return 0.
 
         samples = random.sample(self.LTM, self.batch_size)
         states = None
         targetActions = None
         for sample in samples:
 
-            state, action, reward, delta, newState = sample
+            price, state, action, STPrice, reward, newState, LTPrice = sample
 
-            targetAction = self.target_model.predict(newState)[0]
+            targetAction = self.model.predict(state)[0]
             Q_future = self.QReward(np.argmax(targetAction), delta*(action+1))
 
-            targetAction[action] = reward + self.gamma*Q_future
+            targetAction[action] = reward# + self.gamma*Q_future
 
             if states is None:
                 states = state
@@ -131,41 +149,3 @@ class DeepQNetwork:
 
         history = self.model.fit(states, targetActions, epochs=1, verbose=0)
         return np.average(history.history['loss'])
-
-
-    def trainTarget(self):
-        weights = self.model.get_weights()
-        target_weights = self.target_model.get_weights()
-        for i in range(len(target_weights)):
-            target_weights[i] = weights[i] * self.tau + target_weights[i] * (1 - self.tau)
-        self.target_model.set_weights(target_weights)
-
-
-        # def addToSTM(self, state, action):
-        #     self.STM = [state, action]
-        #
-        # def addToWM(self, STDelta, STNewState):
-        #     if self.STM is not None:
-        #         _, action = self.STM
-        #         if !action:
-        #             reward = self.QReward(action, STDelta)
-        #             self.STM.extend([STDelta, reward, STNewState])
-        #         else:
-        #             self.STM.extend([STDelta])
-        #         self.WM.append(self.STM)
-        #         self.STM = None
-        #
-        # def moveToLTM(self, LTDelta, LTNewState):
-        #     if self.WM is not None:
-        #         action = self.WM[0][1]
-        #         if action:
-        #             reward = self.QReward(action, LTDelta)
-        #             self.WM.extend([reward, LTNewState, LTDelta])
-        #         else:
-        #             reward = self.WM[0][3]
-        #             self.WM.extend([LTDelta])
-        #         self.LTM.append(selt.WM)
-        #         self.WM = self.WM[:-1]
-        #
-        #         return self.
-        #     return 0

@@ -24,6 +24,7 @@ from pprint import pprint
 import logging
 from keras.utils import plot_model
 from collections import deque
+from datetime import datetime
 
 from lib.stockPlotter import StockPlotter
 from lib.deepQNetwork import DeepQNetwork
@@ -63,6 +64,9 @@ class SORIN(strategy.BacktestingStrategy):
         self.__barsProcessed = 0
         self.__startDate = None
         self.__endDate = None
+
+        self.lastReward = 0.
+        self.buyDate = None
 
         self.indicators = []
         for i, indDict in enumerate(indicators):
@@ -146,18 +150,21 @@ class SORIN(strategy.BacktestingStrategy):
 
         if isReady: # If all indicators are ready
             ##============= Deep Q Network =============##
-            reward = self.DQN.moveToLTM((bar.getPrice()/self.prices[-2])-1, state)
+            self.DQN.moveToWM(bar.getPrice(), state)
+            if self.buyDate is not None:
+                if (datetime.strptime(str(bar.getDateTime()),"%Y-%m-%d %H:%M:%S") - datetime.strptime(str(self.buyDate),"%Y-%m-%d %H:%M:%S")).days > 1:
+                    self.lastReward = self.DQN.moveToLTM(bar.getPrice(), state)
+
             doInvest = self.DQN.act(state)
-            self.DQN.addToSTM(state, doInvest)
+            self.DQN.addToSTM(bar.getPrice(), state, doInvest)
 
             loss = self.DQN.replay()
-            self.DQN.trainTarget()
 
             if self.__barsProcessed % self.updatePlotPeriod*10 == 0:
                 self.DQN.saveModel(indicators)
 
             if self.__barsProcessed % self.updatePlotPeriod == 0:
-                print('Loss: {:3.2} Reward: {}, Bars Processed: {}     '.format(loss, np.round(reward,2), self.__barsProcessed), end="\r")
+                print('Loss: {:3.2} Reward: {}, Bars Processed: {}     '.format(loss, np.round(self.lastReward,2), self.__barsProcessed), end="\r")
                 self.lossHistory.append(loss)
                 self.__plotter.plots['DQN']['Loss']['plot'].set_ydata(list(self.lossHistory))
                 self.__plotter.plots['DQN']['subplot'].relim()
@@ -169,6 +176,7 @@ class SORIN(strategy.BacktestingStrategy):
             if doInvest and self.position is None:
                 shares = int(self.getBroker().getCash() * 0.9 / bar.getPrice())
                 self.position = self.enterLong(self.__symbol, shares, True)
+                self.buyDate = bar.getDateTime()
                 # self.__plotter.addBuyPoint('Position', 'Portfolio', bar.getDateTime(), self.getBroker().getEquity())
 
             ## Sell
