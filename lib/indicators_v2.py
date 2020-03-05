@@ -23,7 +23,7 @@ class TimeOfDay:
 class Momentum:
     def __init__(self, strategy, period):
         self.__strategy = strategy
-        self.__indication = False
+        self.__indication = 0
         self.__params = [0]
 
         self.sma = ma.SMA(strategy.prices, period)
@@ -33,16 +33,16 @@ class Momentum:
 
     def run(self, bar):
         if self.sma[-1]-self.sma[-2] > self.__params[0]:
-            self.__indication = True
+            self.__indication = 1
         else:
-            self.__indication = False
+            self.__indication = -1
 
         return self.__indication
 
 class PeakTrough:
     def __init__(self, strategy, interval):
         self.__strategy = strategy
-        self.__indication = False
+        self.__indication = 0
         self.__params = [1, 1]
 
         self.interval = interval # Minutes
@@ -70,11 +70,13 @@ class PeakTrough:
             windowHigh = np.max(self.__strategy.prices[-self.interval-1:])
             windowLow = np.min(self.__strategy.prices[-self.interval-1:])
 
-            if windowHigh > self.lastWindowHigh*self.__params[0] and self.__strategy.position is None:
-                self.__indication = True
+            if windowHigh > self.lastWindowHigh*self.__params[0]:
+                self.__indication = 1
 
-            if windowLow*self.__params[1] < self.lastWindoLow and self.__strategy.position is not None and not self.__strategy.position.exitActive():
-                self.__indication = False
+            elif windowLow*self.__params[1] < self.lastWindoLow:
+                self.__indication = -1
+
+            else: self.__indication = 0
 
             self.lastWindowHigh = windowHigh
             self.lastWindoLow = windowLow
@@ -89,7 +91,7 @@ class FourierPrediction:
 class EMACross:
     def __init__(self, strategy, shortPeriod, longPeriod):
         self.__strategy = strategy
-        self.__indication = False
+        self.__indication = 0
         self.__params = [1, 1]
 
         self.shortEMA = ma.EMA(strategy.prices, shortPeriod)
@@ -105,19 +107,19 @@ class EMACross:
         if cross.cross_above(self.shortEMA, self.longEMA) > 0:
             self.numCrossOvers += 1
             if self.numCrossOvers >= self.__params[0]:
-                self.__indication = True
+                self.__indication = 1
                 self.numCrossOvers = 0
         elif cross.cross_below(self.shortEMA, self.longEMA) > 0:
             self.numCrossUnders += 1
             if self.numCrossUnders >= self.__params[1]:
-                self.__indication = False
+                self.__indication = -1
                 self.numCrossUnders = 0
         return self.__indication
 
 class SMACross:
     def __init__(self, strategy, shortPeriod, longPeriod):
         self.__strategy = strategy
-        self.__indication = False
+        self.__indication = 0
         self.__params = [1, 1]
 
         self.shortSMA = ma.SMA(strategy.prices, shortPeriod)
@@ -133,19 +135,19 @@ class SMACross:
         if cross.cross_above(self.shortSMA, self.longSMA) > 0:
             self.numCrossOvers += 1
             if self.numCrossOvers >= self.__params[0]:
-                self.__indication = True
+                self.__indication = 1
                 self.numCrossOvers = 0
         elif cross.cross_below(self.shortSMA, self.longSMA) > 0:
             self.numCrossUnders += 1
             if self.numCrossUnders >= self.__params[1]:
-                self.__indication = False
+                self.__indication = -1
                 self.numCrossUnders = 0
         return self.__indication
 
 class Ichimoku:
     def __init__(self, strategy):
         self.__strategy = strategy
-        self.__indication = False
+        self.__indication = 0
         self.__params = []
 
         self.tenkanSen = deque(maxlen=2)
@@ -194,20 +196,22 @@ class Ichimoku:
         aboveCloud = bar.getPrice() > self.senkouSpanA[0] and bar.getPrice() > self.senkouSpanB[0]
         A_above_B = self.senkouSpanA[0] > self.senkouSpanB[0]
 
-        if self.__indication and self.tenkanSen[1] < self.kijunSen[1]: # Exit Criteria
-            self.__indication = False
-            return self.__indication
+        if self.__indication==1 and self.tenkanSen[1] < self.kijunSen[1]: # Exit Criteria
+            self.__indication = 0
+
+        if self.__indication==-1 and self.tenkanSen[1] > self.kijunSen[1]:
+            self.__indication = 0
 
         tenkanKijunCrossAbove = (self.tenkanSen[0] <= self.kijunSen[0]) & (self.tenkanSen[1] > self.kijunSen[1])
         priceTenkanCrossAbove = (self.__strategy.prices[-2] <= self.tenkanSen[1]) & (bar.getPrice() > self.tenkanSen[1])
         if aboveCloud and A_above_B and (tenkanKijunCrossAbove or priceTenkanCrossAbove): # Buy
-            self.__indication = True
+            self.__indication = 1
             return self.__indication
 
         tenkanKijunCrossBelow = (self.tenkanSen[0] >= self.kijunSen[0]) & (self.tenkanSen[1] < self.kijunSen[1])
         priceTenkanCrossBelow = (self.__strategy.prices[-2] >= self.tenkanSen[1]) & (bar.getPrice() < self.tenkanSen[1])
         if not aboveCloud and not A_above_B and (tenkanKijunCrossBelow or priceTenkanCrossBelow): # Sell
-            self.__indication = False
+            self.__indication = -1
             return self.__indication
 
         return self.__indication
@@ -216,8 +220,8 @@ class RSI:
     #https://gbeced.github.io/pyalgotrade/docs/v0.16/html/sample_rsi2.html
     def __init__(self, strategy, entrySMA, exitSMA, rsiPeriod):
         self.__strategy = strategy
-        self.__indication = False
-        self.__params = [10]
+        self.__indication = 0
+        self.__params = [10, 90]
 
         self.entrySMA = ma.SMA(self.__strategy.prices, entrySMA)
         self.exitSMA = ma.SMA(self.__strategy.prices, exitSMA)
@@ -230,10 +234,14 @@ class RSI:
 
     def run(self, bar):
 
-        if self.__indication & cross.cross_above(self.__strategy.prices, self.exitSMA):
-            self.__indication = False
+        if self.__indication==1 & cross.cross_above(self.__strategy.prices, self.exitSMA):
+            self.__indication = 0
+        elif self.__indication==-1 & cross.cross_below(self.__strategy.prices, self.entrySMA):
+            self.__indication = 0
         elif bar.getPrice() > self.entrySMA[-1] and self.rsi[-1] <= self.__params[0]:
-            self.__indication = True
+            self.__indication = 1
+        elif bar.getPrice() < self.exitSMA[-1] and self.rsi[-1] >= self.__params[1]:
+            self.__indication = -1
 
         return self.__indication
 
@@ -260,9 +268,9 @@ class threeBarPlay:
         barHeights = self.__strategy.closes[-self.__params[0]:-1] - self.__strategy.opens[-self.__params[0]:-1]
         aveBarHeight = np.average(np.abs(barHeights))
 
-        if self.__indication & bar.getPrice() < self.prevMin:
+        if self.__indication==1 & bar.getPrice() < self.prevMin:
             self.__indication = 0
-        if not self.__indication & bar.getPrice() > self.prevMax:
+        if self.__indication==-1 & bar.getPrice() > self.prevMax:
             self.__indication = 0
 
         if overNarrow & bar.getClose() > self.prevMax:

@@ -18,6 +18,7 @@ from keras.models import model_from_json
 
 LINECOLORS = ['#F45531', '#20CE99']
 NODECOLORS = ['#999999', '#555555']
+maxWeight = 1
 
 COLOR = '#ffffff'
 mpl.rcParams['text.color'] = COLOR
@@ -36,7 +37,10 @@ class Neuron():
         if self.name is None:
             pyplot.gca().text(self.x, self.y-0.15, str(id), size=10, ha='center', zorder=5)
         else:
-            pyplot.gca().text(self.x, self.y-1-0.4*((id+1)%2), self.name, size=10, ha='center', zorder=5)
+            if self.name in ['BUY', 'SELL']:
+                pyplot.gca().text(self.x, self.y+0.8, self.name, size=10, ha='center', zorder=5)
+            else:
+                pyplot.gca().text(self.x, self.y-1-0.4*((id+1)%2), self.name, size=10, ha='center', zorder=5)
 
 class Layer():
     def __init__(self, network, number_of_neurons, number_of_neurons_in_widest_layer, node_names):
@@ -89,7 +93,7 @@ class Layer():
             linewidth =  100*abs_weight
         else:
             linewidth = abs_weight
-        linewidth *= 0.5
+        linewidth *= 2/maxWeight
 
         # draw the weights and adjust the labels of weights to avoid overlapping
         if abs_weight > 0.5:
@@ -197,10 +201,11 @@ class DrawNN():
     # from input layer to output layer, e.g., a neural network of 5 nerons in the input layer,
     # 10 neurons in the hidden layer 1 and 1 neuron in the output layer is [5, 10, 1]
     # para: weights_list (optional) is the output weights list of a neural network which can be obtained via classifier.coefs_
-    def __init__( self, neural_network, weights_list=None, inputNames=None):
+    def __init__( self, neural_network, weights_list=None, inputNames=None, outputNames=None):
         self.neural_network = neural_network
         self.weights_list = weights_list
         self.input_names = inputNames
+        self.output_names = outputNames
         # if weights_list is none, then create a uniform list to fill the weights_list
         if weights_list is None:
             weights_list=[]
@@ -213,11 +218,12 @@ class DrawNN():
         widest_layer = max( self.neural_network )
         network = NeuralNetwork( widest_layer )
         for i,l in enumerate(self.neural_network):
-            network.add_layer(l, self.input_names if i==0 else None)
+            network.add_layer(l, self.input_names if i==0 else (self.output_names if i==len(self.neural_network)-1 else None))
         network.draw(self.weights_list, saveFilename)
 
 
 def main():
+    global maxWeight
     modelName = sys.argv[1]
 
     modelFilename = "./"+modelName+".json"
@@ -253,14 +259,17 @@ def main():
     model.load_weights(weightsFilename)
 
     inputNames = [indicator['TYPE'] for indicator in params['indicators']]
+    outputNames = ['SELL', 'BUY']
 
     architecture = [np.squeeze(model.layers[0].input_shape)[1]]
     weights = []
+    maxWeight = 0.
     for layer in model.layers:
         architecture.append(np.squeeze(layer.output_shape)[1])
         weights.append(np.squeeze(layer.get_weights()[0]))
+        maxWeight = max(maxWeight, np.max(abs(np.array(layer.get_weights()[0]))))
 
-    network = DrawNN(architecture, weights, inputNames)
+    network = DrawNN(architecture, weights, inputNames, outputNames)
     network.draw(saveFilename)
 
     return

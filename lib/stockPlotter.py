@@ -88,6 +88,9 @@ class StockPlotter:
 
         self.plots[plotName]['subplot'].legend(bbox_to_anchor=(1, 1), loc='upper left')
 
+    def addRollingPlot(self, plotName, dataName, x, y, c=None):
+        return
+
     def addInfo(self):
         topPlot = self.plots[list(self.plots.keys())[0]]['subplot']
         self.returns = topPlot.annotate("0%", xy=(0.05, 1.14), xycoords='axes fraction', fontsize='xx-large', color="#00AE28")
@@ -102,10 +105,10 @@ class StockPlotter:
         self.benchmarkcapital = topPlot.annotate('$1,000,000', xy=(0.6, 1.14), xycoords='axes fraction', fontsize='xx-large', color="#bfbdbd")
         topPlot.annotate('capital', xy=(0.6, 1.04), xycoords='axes fraction', fontsize='medium', color='#808080')
 
-        self.epsilon = topPlot.annotate('100%', xy=(0.85, 1.14), xycoords='axes fraction', fontsize='xx-large', color="#2dedad")
+        self.epsilon = topPlot.annotate('0%', xy=(0.85, 1.14), xycoords='axes fraction', fontsize='xx-large', color="#2dedad")
         topPlot.annotate('Exploration', xy=(0.85, 1.04), xycoords='axes fraction', fontsize='medium', color='#808080')
 
-    def updatePlot(self, plotName, dataName, x=None, y=None, c=None):
+    def updatePlot(self, plotName, dataName, x=None, y=None, c=None, rolling=False):
         if plotName not in self.plots.keys():
             raise Exception('No plot by name ', plotName)
 
@@ -115,13 +118,23 @@ class StockPlotter:
             x = None
 
         if dataName not in self.plots[plotName].keys():
-            self.addDataPlot(plotName, dataName, x, y, c)
+            if rolling:
+                self.addRollingPlot(plotName, dataName, x, y, c)
+            else:
+                self.addDataPlot(plotName, dataName, x, y, c)
 
-        self.plots[plotName][dataName]['xData'].append(x)
-        self.plots[plotName][dataName]['yData'].append(y)
-        if x is None:
-            self.plots[plotName][dataName]['xData'] = np.arange(len(self.plots[plotName][dataName]['yData'])).tolist()
-        self.plots[plotName][dataName]['plot'].set_data(self.plots[plotName][dataName]['xData'], self.plots[plotName][dataName]['yData'])
+        if rolling:
+            if y == None:
+                self.plots[plotName][dataName]['plot'].set_ydata(x)
+            else:
+                self.plots[plotName][dataName]['plot'].set_ydata(y)
+            return
+        else:
+            self.plots[plotName][dataName]['xData'].append(x)
+            self.plots[plotName][dataName]['yData'].append(y)
+            if x is None:
+                self.plots[plotName][dataName]['xData'] = np.arange(len(self.plots[plotName][dataName]['yData'])).tolist()
+            self.plots[plotName][dataName]['plot'].set_data(self.plots[plotName][dataName]['xData'], self.plots[plotName][dataName]['yData'])
 
         self.plots[plotName]['subplot'].relim()
         self.plots[plotName]['subplot'].autoscale_view()

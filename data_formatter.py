@@ -1,10 +1,13 @@
 import pandas as pd
 import numpy as np
 import glob
+import sys
+import datetime
 
-symbol = sys.argv[0]
+symbol = sys.argv[1]
 
-for filename in glob.glob("../raw_data/{}*.csv".format(symbol))
+for filename in glob.glob("../raw_data/{}*.csv".format(symbol)):
+    print(filename)
     data = pd.read_csv(filename)
     print('Size: ', data.shape[0], ' datapoints')
 
@@ -23,5 +26,11 @@ for filename in glob.glob("../raw_data/{}*.csv".format(symbol))
     tradingIdxs = isTrading(dateTimes)
 
     tradingData = data[tradingIdxs]
+    volumeIdxs = tradingData['Volume'] > 0
 
-    tradingData.to_csv('../clean_data/'+filenmae.split('/')[2])
+    cleanData = tradingData[volumeIdxs]
+    cleanData.loc[:,'Volume'] *= 1000000
+
+    print('Total Datapoints: ', data.shape[0], ' datapoints')
+
+    cleanData.to_csv('../clean_data/'+filename.split('/')[2])

@@ -33,12 +33,12 @@ class Backtest(strategy.BacktestingStrategy):
         self.__barsProcessed = 0
         self.__initialPrice = None
 
-        self.__indicator = PeakTrough(self, interval=30)
-
         self.getBroker().getFillStrategy().setVolumeLimit(None)
         self.prices = feed[instrument].getPriceDataSeries()
 
-        self.updatePlotPeriod = 1000
+        self.__indicator = PeakTrough(self, interval=30)
+
+        self.updatePlotPeriod = 2
         self.__plotter = StockPlotter()
         self.__plotter.addPlot('Position')
         self.__plotter.addInfo()
@@ -63,12 +63,12 @@ class Backtest(strategy.BacktestingStrategy):
         self.position.exitMarket()
 
     def onBars(self, bars):
+        bar = bars[self.__symbol]
         if self.__startDate is not None and bar.getDateTime() < self.__startDate:
             return
         if self.__endDate is not None and bar.getDateTime() > self.__endDate:
             return
 
-        bar = bars[self.__symbol]
         self.__barsProcessed += 1
 
         # Save initial price for benchmark
@@ -120,8 +120,8 @@ feed.addBarsFromCSV(symbol, dataFilename)
 
 ##==== Initialize Strategy ====##
 backtest = Backtest(feed, symbol)
-backtest.setStartDate()
-backtest.setEndDate()
+backtest.setStartDate('08-22-2019')
+backtest.setEndDate('9-01-2019')
 
 ##= Attach Strategy Analyzers =##
 retAnalyzer = returns.Returns()
